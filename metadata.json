@@ -1,0 +1,6 @@
+{
+  "name": "نظام إدارة المحافظ والمناديب",
+  "description": "نظام سحب بيانات الشيت وفلترة مديونيات المحافظ الكبيرة وإرسال رسائل التوريد والغياب للعمالة المتوقفة عبر واتساب بنقرة واحدة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
