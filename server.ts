@@ -43,12 +43,14 @@ async function startServer() {
         }
       }
 
-      // 2. Fetch via CSV export URL
-      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+      // 2. Fetch via CSV export URL with cache-busting timestamp
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}&_t=${Date.now()}`;
       const response = await fetch(csvUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
           Accept: 'text/csv,text/plain,*/*',
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
         },
         redirect: 'follow',
       });
@@ -61,6 +63,9 @@ async function startServer() {
       }
 
       const csvText = await response.text();
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       return res.json({ success: true, source: 'csv_export', csv: csvText });
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -73,8 +78,15 @@ async function startServer() {
 
   // Vite middleware in dev or static files in prod
   if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.use(express.static(path.resolve(__dirname, 'dist'), {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      }
+    }));
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   } else {
