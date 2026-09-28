@@ -11,6 +11,8 @@ export interface DriverRecord {
   lastTransactionDate: string; // تاريخ المعامله
   walletBalance: number; // رصيد المحفظة كرقم
   rawWalletBalance: string; // النص الأصلي
+  balanceType?: 'debt' | 'credit' | 'zero'; // نوع الرصيد
+  balanceLabel?: string; // وصف الرصيد بالعربية
   daysInactive: number; // عدد الأيام
   rawDaysInactive: string; // النص الأصلي
   
