@@ -17,6 +17,9 @@ export function convertArabicDigitsToEnglish(str: string): string {
 }
 
 /**
+ * Clean and parse wallet balance from Arabic/English string to float
+ * Handles: "3243٫38", "-60٫02", "1,250.50", "32.18", "(100)", etc.
+ */
 export function parseWalletBalance(rawVal: string | number | undefined | null): number {
   if (rawVal === undefined || rawVal === null) return 0;
   if (typeof rawVal === 'number') return isNaN(rawVal) ? 0 : rawVal;
