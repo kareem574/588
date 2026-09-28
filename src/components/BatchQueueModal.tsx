@@ -13,7 +13,7 @@ import {
   Wallet,
   UserCheck
 } from 'lucide-react';
-import { DriverRecord, MessageTemplates } from '../types';
+import { DriverRecord, MessageTemplates, MessageType } from '../types';
 import { buildMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { formatCurrency, getCleanDriverName } from '../utils/parser';
 
@@ -22,7 +22,7 @@ interface BatchQueueModalProps {
   templates: MessageTemplates;
   isOpen: boolean;
   onClose: () => void;
-  onMarkSent: (driverCode: string) => void;
+  onMarkSent: (driverCode: string, type?: MessageType) => void;
 }
 
 export const BatchQueueModal: React.FC<BatchQueueModalProps> = ({
@@ -40,13 +40,14 @@ export const BatchQueueModal: React.FC<BatchQueueModalProps> = ({
   const currentDriver = drivers[currentIndex];
   const cleanName = getCleanDriverName(currentDriver.driverName);
 
-  const messageType = currentDriver.isCritical ? 'critical' : 
-                      currentDriver.isHighDebt ? 'high_debt' : 'inactive';
+  const messageType: MessageType = currentDriver.isCritical ? 'critical' : 
+                                   currentDriver.walletBalance < 0 ? 'credit' :
+                                   currentDriver.isHighDebt ? 'high_debt' : 'inactive';
   const messageText = buildMessage(currentDriver, messageType, templates);
 
   const handleSendAndNext = () => {
     openWhatsAppChat(currentDriver.normalizedPhone, messageText);
-    onMarkSent(currentDriver.driverCode);
+    onMarkSent(currentDriver.driverCode, messageType);
     if (currentIndex < drivers.length - 1) {
       setCurrentIndex(prev => prev + 1);
     }
@@ -124,12 +125,24 @@ export const BatchQueueModal: React.FC<BatchQueueModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="bg-red-50 border border-red-200 p-2 sm:p-2.5 rounded-xl text-center flex-1 sm:min-w-[100px]">
-                <span className="text-[10px] text-red-600 font-semibold block">المحفظة</span>
-                <span className="text-xs sm:text-sm font-bold text-red-700">{formatCurrency(currentDriver.walletBalance)}</span>
-              </div>
+              {currentDriver.walletBalance > 0 ? (
+                <div className="bg-red-50 border border-red-200 p-2 sm:p-2.5 rounded-xl text-center flex-1 sm:min-w-[110px]">
+                  <span className="text-[10px] text-red-600 font-bold block">مديونية عليه (+)</span>
+                  <span className="text-xs sm:text-sm font-black text-red-700" dir="ltr">+{formatCurrency(currentDriver.walletBalance)}</span>
+                </div>
+              ) : currentDriver.walletBalance < 0 ? (
+                <div className="bg-emerald-50 border border-emerald-200 p-2 sm:p-2.5 rounded-xl text-center flex-1 sm:min-w-[110px]">
+                  <span className="text-[10px] text-emerald-700 font-bold block">مستحقات له (-)</span>
+                  <span className="text-xs sm:text-sm font-black text-emerald-800" dir="ltr">{formatCurrency(currentDriver.walletBalance)}</span>
+                </div>
+              ) : (
+                <div className="bg-slate-100 border border-slate-200 p-2 sm:p-2.5 rounded-xl text-center flex-1 sm:min-w-[110px]">
+                  <span className="text-[10px] text-slate-500 font-semibold block">المحفظة</span>
+                  <span className="text-xs sm:text-sm font-bold text-slate-700">0.00 ج.م (خالص)</span>
+                </div>
+              )}
 
-              <div className="bg-amber-50 border border-amber-200 p-2 sm:p-2.5 rounded-xl text-center flex-1 sm:min-w-[100px]">
+              <div className="bg-amber-50 border border-amber-200 p-2 sm:p-2.5 rounded-xl text-center flex-1 sm:min-w-[90px]">
                 <span className="text-[10px] text-amber-700 font-semibold block">مدة التوقف</span>
                 <span className="text-xs sm:text-sm font-bold text-amber-800">{currentDriver.daysInactive} أيام</span>
               </div>
@@ -142,9 +155,10 @@ export const BatchQueueModal: React.FC<BatchQueueModalProps> = ({
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-700">
               نوع الرسالة: {
-                messageType === 'critical' ? '🚨 إنذار حرج وتوريد' : 
-                messageType === 'high_debt' ? '🔴 طلب توريد المحفظة' : 
-                '🟡 استفسار عن الغياب وتوريد المحفظة'
+                messageType === 'critical' ? '🚨 إنذار حرج (توقف + مديونية عليه)' : 
+                messageType === 'credit' ? '💰 إشعار مستحقات المندوب (فلوس له طرف الشركة)' :
+                messageType === 'high_debt' ? '🔴 طلب توريد المديونية (مديونية مسجلة عليه)' : 
+                '🟡 استفسار عن الغياب وموقف المحفظة'
               }
             </span>
             <button

@@ -33,7 +33,8 @@ import {
   DriverRecord, 
   FilterSettings, 
   MessageTemplates, 
-  ActiveTab 
+  ActiveTab,
+  MessageType
 } from './types';
 import { 
   parseDriversData, 
@@ -55,7 +56,10 @@ import {
   Download,
   MessageSquareShare,
   SlidersHorizontal,
-  Menu
+  Menu,
+  Coins,
+  ArrowDownLeft,
+  ArrowUpRight
 } from 'lucide-react';
 
 const DEFAULT_SHEET_ID = '1OkLAv21jl36iQQO_x9EeWq0sSLYtPFt1VCgtgC8CUBA';
@@ -113,7 +117,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('high_debt');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedDriverForMessage, setSelectedDriverForMessage] = useState<DriverRecord | null>(null);
-  const [messageTypeForModal, setMessageTypeForModal] = useState<'high_debt' | 'inactive' | 'critical'>('high_debt');
+  const [messageTypeForModal, setMessageTypeForModal] = useState<MessageType>('high_debt');
   
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [isBatchQueueOpen, setIsBatchQueueOpen] = useState(false);
@@ -138,115 +142,46 @@ export default function App() {
     localStorage.setItem('el_ezz_sheet_id', sheetId);
   }, [sheetId]);
 
-  // Fetch Sheet Data with robust multi-strategy fetching (Google Sheets Direct + Proxy + Fallbacks)
+  // Fetch Sheet Data from server proxy route
   const fetchSheetData = useCallback(async (targetSheetId = sheetId) => {
     setIsLoading(true);
     setError(null);
 
-    let csvText = '';
-    let loadSuccess = false;
-    let errorDetails = '';
-
-    // Strategy 1: Direct fetch from Google Sheets GViz CSV (CORS-enabled by Google, works everywhere including Vercel and mobile browser)
     try {
-      const gvizUrl = `https://docs.google.com/spreadsheets/d/${targetSheetId}/gviz/tq?tqx=out:csv`;
-      const res = await fetch(gvizUrl, {
-        method: 'GET',
-        headers: { Accept: 'text/csv,text/plain,*/*' },
-      });
+      const res = await fetch(`/api/sheet-data?sheetId=${encodeURIComponent(targetSheetId)}`);
+      const data = await res.json();
 
-      if (res.ok) {
-        const text = await res.text();
-        if (text && (text.includes('المندوب') || text.includes('كود') || text.includes('الزون') || text.includes(','))) {
-          csvText = text;
-          loadSuccess = true;
-        }
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'تعذر جلب بيانات الشيت من خادم Google');
       }
-    } catch (e: any) {
-      console.warn('Direct Google GViz fetch failed, trying proxy...', e);
-      errorDetails = e?.message || '';
-    }
 
-    // Strategy 2: Try local / Vercel API proxy endpoint (/api/sheet-data)
-    if (!loadSuccess) {
-      try {
-        const res = await fetch(`/api/sheet-data?sheetId=${encodeURIComponent(targetSheetId)}`);
-        const contentType = res.headers.get('content-type') || '';
-        
-        // Ensure the response is actual JSON before attempting parse (prevents "Unexpected token T" on HTML 404s)
-        if (contentType.includes('application/json')) {
-          const data = await res.json();
-          if (res.ok && data.success) {
-            if (data.source === 'csv_export' && data.csv) {
-              csvText = data.csv;
-              loadSuccess = true;
-            } else if (data.source === 'oauth_api' && Array.isArray(data.values)) {
-              csvText = data.values
-                .map((row: any[]) =>
-                  row
-                    .map((cell: any) => {
-                      const s = String(cell ?? '');
-                      return s.includes(',') || s.includes('"') || s.includes('\n')
-                        ? `"${s.replace(/"/g, '""')}"`
-                        : s;
-                    })
-                    .join(',')
-                )
-                .join('\n');
-              loadSuccess = true;
-            }
-          } else if (data.error) {
-            errorDetails = data.error;
-          }
-        }
-      } catch (err: any) {
-        console.warn('API proxy fetch failed:', err);
-        if (!errorDetails) errorDetails = err?.message || '';
+      let csvText = '';
+      if (data.source === 'csv_export') {
+        csvText = data.csv;
+      } else if (data.source === 'oauth_api' && Array.isArray(data.values)) {
+        // Convert 2D array to CSV format
+        csvText = data.values
+          .map((row: any[]) =>
+            row
+              .map((cell: any) => {
+                const s = String(cell ?? '');
+                return s.includes(',') || s.includes('"') || s.includes('\n')
+                  ? `"${s.replace(/"/g, '""')}"`
+                  : s;
+              })
+              .join(',')
+          )
+          .join('\n');
       }
-    }
 
-    // Strategy 3: Direct export link
-    if (!loadSuccess) {
-      try {
-        const exportUrl = `https://docs.google.com/spreadsheets/d/${targetSheetId}/export?format=csv`;
-        const res = await fetch(exportUrl);
-        if (res.ok) {
-          const text = await res.text();
-          if (text && !text.trim().startsWith('<!DOCTYPE html') && !text.trim().startsWith('<html')) {
-            csvText = text;
-            loadSuccess = true;
-          }
-        }
-      } catch (e: any) {
-        console.warn('Direct export link fetch failed:', e);
-      }
-    }
-
-    // Strategy 4: Fallback via public CORS gateway
-    if (!loadSuccess) {
-      try {
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://docs.google.com/spreadsheets/d/${targetSheetId}/export?format=csv`)}`;
-        const res = await fetch(proxyUrl);
-        if (res.ok) {
-          const text = await res.text();
-          if (text && !text.trim().startsWith('<') && text.length > 30) {
-            csvText = text;
-            loadSuccess = true;
-          }
-        }
-      } catch (e: any) {
-        console.warn('CORS gateway fetch failed:', e);
-      }
-    }
-
-    if (loadSuccess && csvText) {
       setRawCSV(csvText);
       const parsedDrivers = parseDriversData(csvText, settings, savedStatuses);
       setDrivers(parsedDrivers);
+    } catch (err: any) {
+      console.error('Failed to load sheet data:', err);
+      setError(err.message || 'حدث خطأ أثناء تحميل بيانات الجدول');
+    } finally {
       setIsLoading(false);
-    } else {
-      setIsLoading(false);
-      setError(errorDetails || 'تعذر جلب بيانات الشيت تلقائياً. تأكد من إمكانية الوصول إلى جدول Google Sheets أو استخدم زر رفع ملف يدوياً.');
     }
   }, [sheetId, settings, savedStatuses]);
 
@@ -295,6 +230,7 @@ export default function App() {
       if (activeTab === 'high_debt' && !driver.isHighDebt) return false;
       if (activeTab === 'inactive' && !driver.isInactive) return false;
       if (activeTab === 'critical' && !driver.isCritical) return false;
+      if (activeTab === 'credit_drivers' && driver.walletBalance >= 0) return false;
       
       // 2. Search query (name, code, phone)
       if (settings.searchQuery.trim()) {
@@ -341,14 +277,15 @@ export default function App() {
     }));
   };
 
-  const handleOpenMessageModal = (driver: DriverRecord, type: 'high_debt' | 'inactive' | 'critical') => {
+  const handleOpenMessageModal = (driver: DriverRecord, type: MessageType) => {
     setSelectedDriverForMessage(driver);
     setMessageTypeForModal(type);
     setIsMessageModalOpen(true);
   };
 
-  const handleMarkSent = (driverCode: string, type?: 'high_debt' | 'inactive' | 'critical') => {
+  const handleMarkSent = (driverCode: string, type?: MessageType) => {
     const nextStatus = type === 'high_debt' ? 'sent_debt' : 
+                       type === 'credit' ? 'sent_debt' :
                        type === 'inactive' ? 'sent_inactive' : 'sent_both';
     handleToggleStatus(driverCode, nextStatus);
   };
@@ -478,11 +415,13 @@ export default function App() {
             <div className="flex items-center gap-2.5 sm:gap-3">
               <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white shrink-0 ${
                 activeTab === 'high_debt' ? 'bg-red-600' :
+                activeTab === 'credit_drivers' ? 'bg-emerald-600' :
                 activeTab === 'inactive' ? 'bg-amber-600' :
                 activeTab === 'critical' ? 'bg-purple-700' :
-                activeTab === 'overview' ? 'bg-slate-800' : 'bg-emerald-600'
+                activeTab === 'overview' ? 'bg-slate-800' : 'bg-blue-600'
               }`}>
                 {activeTab === 'high_debt' && <Wallet className="w-5 h-5" />}
+                {activeTab === 'credit_drivers' && <Coins className="w-5 h-5" />}
                 {activeTab === 'inactive' && <Clock className="w-5 h-5" />}
                 {activeTab === 'critical' && <Flame className="w-5 h-5" />}
                 {activeTab === 'overview' && <Layers className="w-5 h-5" />}
@@ -490,14 +429,16 @@ export default function App() {
               </div>
               <div className="min-w-0">
                 <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate">
-                  {activeTab === 'high_debt' && '🔴 مديونيات المحافظ المرتفعة (رسائل طلب التوريد)'}
+                  {activeTab === 'high_debt' && '🔴 مديونيات المحافظ المرتفعة (موجب + مطلوب توريده)'}
+                  {activeTab === 'credit_drivers' && '🟢 مستحقات المناديب (سالب - دائن للمندوب / له لدى الشركة)'}
                   {activeTab === 'inactive' && '🟡 المناديب المتوقفين عن العمل (رسائل مدة التوقف وتوريد المحفظة ومعرفة سبب الغياب)'}
                   {activeTab === 'critical' && '🚨 الحالات الحرجة المشتركة (توقف طويل + مديونية كبيرة)'}
                   {activeTab === 'overview' && '📊 لوحة التحليلات وخطة العمل اليومية'}
                   {activeTab === 'all_drivers' && '📋 جميع مناديب الشيت (سجل المتابعة الشامل)'}
                 </h2>
                 <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 line-clamp-1">
-                  {activeTab === 'high_debt' && 'المناديب الذين تجاوزت محفظتهم الحد المحدد - إرسال رسالة واتساب بنقرة واحدة لتوريد الكاش.'}
+                  {activeTab === 'high_debt' && 'المناديب الذين تجاوزت محفظتهم الحد المحدد (رصيد موجب = فلوس على المندوب مطلوب توريدها).'}
+                  {activeTab === 'credit_drivers' && 'المناديب أصحاب الأرصدة السالبة (رصيد دائن = مستحقات للمندوب لدى الشركة جاهزة للصرف).'}
                   {activeTab === 'inactive' && 'المناديب الذين لم يسجلوا حركة منذ عدة أيام - ترسل الرسالة عدد الأيام بدقة وتطلب التوريد وتوضح سبب التوقف.'}
                   {activeTab === 'critical' && 'المناديب ذوو المخاطر العالية: متوقفون عن العمل مع وجود مبالغ معلقة بالمحفظة.'}
                   {activeTab === 'overview' && 'ملخص تنفيذي للمحفظة وتوزيع المناديب ومعدلات التوريد.'}

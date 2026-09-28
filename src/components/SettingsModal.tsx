@@ -86,56 +86,75 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           
           {activeSubTab === 'templates' ? (
             <>
-              {/* Template 1: High Debt */}
+              {/* Template 1: High Debt (Positive Balance = Debt on Driver) */}
               <div>
-                <label className="text-xs font-bold text-slate-800 block mb-1">
-                  1. قالب رسالة مديونية المحفظة المرتفعة (طلب التوريد):
+                <label className="text-xs font-bold text-red-700 flex items-center justify-between mb-1">
+                  <span>1. قالب رسالة مديونية المحفظة (رصيد موجب - مديونية على المندوب مطلوب توريدها):</span>
+                  <span className="text-[10px] bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-200">موجب (+)</span>
                 </label>
                 <textarea
                   rows={4}
                   value={tempTemplates.highDebtTemplate}
                   onChange={(e) => setTempTemplates({ ...tempTemplates, highDebtTemplate: e.target.value })}
-                  className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:border-emerald-500 text-slate-900 font-sans"
+                  className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:border-red-500 text-slate-900 font-sans leading-relaxed"
                 />
               </div>
 
-              {/* Template 2: Inactive Drivers */}
+              {/* Template 2: Credit (Negative Balance = Money for Driver) */}
               <div>
-                <label className="text-xs font-bold text-slate-800 block mb-1">
-                  2. قالب رسالة المناديب المتوقفين (الاستفسار عن الغياب + توريد المحفظة):
+                <label className="text-xs font-bold text-emerald-700 flex items-center justify-between mb-1">
+                  <span>2. قالب رسالة مستحقات المندوب (رصيد سالب - فلوس للمندوب طرف الشركة):</span>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">سالب (-)</span>
                 </label>
                 <textarea
-                  rows={5}
-                  value={tempTemplates.inactiveTemplate}
-                  onChange={(e) => setTempTemplates({ ...tempTemplates, inactiveTemplate: e.target.value })}
-                  className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:border-emerald-500 text-slate-900 font-sans"
+                  rows={4}
+                  value={tempTemplates.creditTemplate || DEFAULT_TEMPLATES.creditTemplate}
+                  onChange={(e) => setTempTemplates({ ...tempTemplates, creditTemplate: e.target.value })}
+                  className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:border-emerald-500 text-slate-900 font-sans leading-relaxed"
                 />
               </div>
 
-              {/* Template 3: Critical */}
+              {/* Template 3: Inactive Drivers */}
               <div>
-                <label className="text-xs font-bold text-slate-800 block mb-1">
-                  3. قالب رسالة الحالات الحرجة (متوقف + مديونية كبيرة):
+                <label className="text-xs font-bold text-amber-800 flex items-center justify-between mb-1">
+                  <span>3. قالب رسالة المناديب المتوقفين (الاستفسار عن الغياب + موقف المحفظة):</span>
+                  <span className="text-[10px] bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200">متوقف</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={tempTemplates.inactiveTemplate}
+                  onChange={(e) => setTempTemplates({ ...tempTemplates, inactiveTemplate: e.target.value })}
+                  className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:border-amber-500 text-slate-900 font-sans leading-relaxed"
+                />
+              </div>
+
+              {/* Template 4: Critical */}
+              <div>
+                <label className="text-xs font-bold text-purple-800 flex items-center justify-between mb-1">
+                  <span>4. قالب رسالة الحالات الحرجة (متوقف + مديونية كبيرة):</span>
+                  <span className="text-[10px] bg-purple-50 text-purple-800 px-2 py-0.5 rounded border border-purple-200">حرج</span>
                 </label>
                 <textarea
                   rows={4}
                   value={tempTemplates.criticalTemplate}
                   onChange={(e) => setTempTemplates({ ...tempTemplates, criticalTemplate: e.target.value })}
-                  className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:border-emerald-500 text-slate-900 font-sans"
+                  className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:border-purple-500 text-slate-900 font-sans leading-relaxed"
                 />
               </div>
 
               {/* Tags Helper */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600">
-                <p className="font-bold text-slate-800 mb-1">المتغيرات المتاحة للاستخدام داخل النصوص:</p>
+                <p className="font-bold text-slate-800 mb-1">المتغيرات التلقائية المتاحة داخل النصوص:</p>
                 <div className="flex flex-wrap gap-1.5 font-mono text-emerald-800">
-                  <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">{"{اسم_المندوب}"}</span>
-                  <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">{"{كود_المندوب}"}</span>
-                  <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">{"{رصيد_المحفظة}"}</span>
-                  <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">{"{عدد_الايام}"}</span>
-                  <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">{"{تاريخ_المعاملة}"}</span>
-                  <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">{"{المشرف}"}</span>
-                  <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">{"{الشركة}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded">{"{اسم_المندوب}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded">{"{كود_المندوب}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded" title="يظهر معه توضيح (مديونية عليك / مستحقات لك)">{"{رصيد_المحفظة}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded">{"{نوع_الرصيد}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded">{"{مطلوب_المحفظة}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded">{"{عدد_الايام}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded">{"{تاريخ_المعاملة}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded">{"{المشرف}"}</span>
+                  <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded">{"{الشركة}"}</span>
                 </div>
               </div>
             </>

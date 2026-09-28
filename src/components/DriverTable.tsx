@@ -13,9 +13,13 @@ import {
   Calendar,
   User,
   ShieldCheck,
-  Share2
+  Share2,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Coins,
+  TrendingUp
 } from 'lucide-react';
-import { DriverRecord, ActiveTab, MessageTemplates } from '../types';
+import { DriverRecord, ActiveTab, MessageTemplates, MessageType } from '../types';
 import { formatCurrency, getCleanDriverName } from '../utils/parser';
 import { buildMessage, openWhatsAppChat } from '../utils/whatsapp';
 
@@ -23,7 +27,7 @@ interface DriverTableProps {
   drivers: DriverRecord[];
   templates: MessageTemplates;
   activeTab: ActiveTab;
-  onPreviewMessage: (driver: DriverRecord, type: 'high_debt' | 'inactive' | 'critical') => void;
+  onPreviewMessage: (driver: DriverRecord, type: MessageType) => void;
   onToggleStatus: (driverCode: string, newStatus: DriverRecord['status']) => void;
 }
 
@@ -42,13 +46,14 @@ export const DriverTable: React.FC<DriverTableProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleQuickWhatsApp = (driver: DriverRecord, type: 'high_debt' | 'inactive' | 'critical') => {
+  const handleQuickWhatsApp = (driver: DriverRecord, type: MessageType) => {
     const text = buildMessage(driver, type, templates);
     openWhatsAppChat(driver.normalizedPhone, text);
     
     // Automatically record status if currently pending
     if (driver.status === 'pending') {
       const nextStatus = type === 'high_debt' ? 'sent_debt' : 
+                         type === 'credit' ? 'sent_debt' :
                          type === 'inactive' ? 'sent_inactive' : 'sent_both';
       onToggleStatus(driver.driverCode, nextStatus);
     }
@@ -80,7 +85,11 @@ export const DriverTable: React.FC<DriverTableProps> = ({
         {drivers.map((driver) => {
           const cleanName = getCleanDriverName(driver.driverName);
           const isSent = driver.status.startsWith('sent_') || driver.status === 'resolved';
-          const targetType = driver.isCritical ? 'critical' : driver.isHighDebt ? 'high_debt' : 'inactive';
+          const targetType: MessageType = driver.isCritical ? 'critical' : 
+                                          driver.walletBalance < 0 ? 'credit' : 
+                                          driver.isHighDebt ? 'high_debt' : 'inactive';
+          const isPositiveDebt = driver.walletBalance > 0;
+          const isNegativeCredit = driver.walletBalance < 0;
 
           return (
             <div
@@ -90,6 +99,8 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                   ? 'border-purple-200 bg-purple-50/20' 
                   : driver.isHighDebt 
                   ? 'border-red-200 bg-red-50/10' 
+                  : isNegativeCredit
+                  ? 'border-emerald-200 bg-emerald-50/10'
                   : driver.isInactive 
                   ? 'border-amber-200 bg-amber-50/10' 
                   : 'border-slate-200'
@@ -109,7 +120,12 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                     )}
                     {driver.isHighDebt && !driver.isCritical && (
                       <span className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                        مديونية
+                        مديونية توريد
+                      </span>
+                    )}
+                    {isNegativeCredit && (
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                        له مستحقات
                       </span>
                     )}
                   </div>
@@ -146,25 +162,53 @@ export const DriverTable: React.FC<DriverTableProps> = ({
 
               {/* Card Middle: Key Metrics (Wallet & Inactivity) */}
               <div className="grid grid-cols-2 gap-2 my-3 p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                {/* Balance */}
+                
+                {/* Balance Block */}
                 <div>
-                  <span className="text-[11px] text-slate-500 block mb-0.5">رصيد المحفظة:</span>
-                  <span 
-                    className={`font-black text-sm px-2 py-0.5 rounded-md inline-block ${
-                      driver.isHighDebt
-                        ? 'bg-red-100 text-red-800 border border-red-200'
-                        : Math.abs(driver.walletBalance) > 0
-                        ? 'bg-slate-200/70 text-slate-800'
-                        : 'bg-emerald-50 text-emerald-700'
-                    }`}
-                  >
-                    {formatCurrency(driver.walletBalance)}
-                  </span>
+                  <span className="text-[11px] text-slate-500 block mb-0.5 font-medium">رصيد المحفظة:</span>
+                  
+                  {isPositiveDebt ? (
+                    <div className="space-y-1">
+                      <span 
+                        className={`font-black text-sm px-2 py-0.5 rounded-md inline-flex items-center gap-1 ${
+                          driver.isHighDebt
+                            ? 'bg-red-100 text-red-800 border border-red-300'
+                            : 'bg-amber-100 text-amber-900 border border-amber-200'
+                        }`}
+                      >
+                        <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-red-600" />
+                        <span dir="ltr">+{formatCurrency(driver.walletBalance)}</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-red-700 block">
+                        مديونية على المندوب
+                      </span>
+                    </div>
+                  ) : isNegativeCredit ? (
+                    <div className="space-y-1">
+                      <span className="font-black text-sm px-2 py-0.5 rounded-md inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <ArrowDownLeft className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                        <span dir="ltr">{formatCurrency(driver.walletBalance)}</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-700 block">
+                        مستحقات للمندوب (له)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <span className="font-bold text-sm px-2 py-0.5 rounded-md inline-flex items-center gap-1 bg-slate-200 text-slate-700 border border-slate-300">
+                        <Check className="w-3 h-3 text-slate-500" />
+                        <span>0.00 ج.م</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        حساب خالص
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Inactive Duration */}
                 <div>
-                  <span className="text-[11px] text-slate-500 block mb-0.5">مدة التوقف:</span>
+                  <span className="text-[11px] text-slate-500 block mb-0.5 font-medium">مدة التوقف:</span>
                   <span
                     className={`font-bold text-xs px-2 py-0.5 rounded-md inline-flex items-center gap-1 ${
                       driver.daysInactive >= 10
@@ -224,9 +268,10 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                 >
                   <MessageSquare className="w-4 h-4" />
                   <span>
-                    {targetType === 'critical' ? 'واتساب عاجل (توقف+توريد)' : 
-                     targetType === 'high_debt' ? 'واتساب طلب التوريد' : 
-                     'واتساب مدة الغياب'}
+                    {targetType === 'critical' ? 'واتساب عاجل (توقف+مديونية)' : 
+                     targetType === 'credit' ? 'واتساب المستحقات (فلوس له)' :
+                     targetType === 'high_debt' ? 'واتساب طلب التوريد (مديونية عليه)' : 
+                     driver.isInactive ? 'واتساب مدة الغياب' : 'واتساب المندوب'}
                   </span>
                 </button>
 
@@ -254,39 +299,56 @@ export const DriverTable: React.FC<DriverTableProps> = ({
           <table className="w-full text-right border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-600">
-                <th className="py-3 px-4">المندوب والكود</th>
-                <th className="py-3 px-4">رقم الهاتف</th>
-                <th className="py-3 px-4">المنطقة والزون</th>
-                <th className="py-3 px-4">رصيد المحفظة</th>
-                <th className="py-3 px-4">مدة التوقف (بقاله قد ايه)</th>
-                <th className="py-3 px-4">تاريخ آخر معاملة</th>
-                <th className="py-3 px-4 text-center">إجراءات الواتساب والمراسلة</th>
-                <th className="py-3 px-4 text-center">حالة التواصل</th>
+                <th className="py-3.5 px-4">المندوب والكود</th>
+                <th className="py-3.5 px-4">رقم الهاتف</th>
+                <th className="py-3.5 px-4">المنطقة والزون</th>
+                <th className="py-3.5 px-4 min-w-[210px]">
+                  <span>رصيد المحفظة (المديونية والمستحقات)</span>
+                </th>
+                <th className="py-3.5 px-4">مدة التوقف (بقاله قد ايه)</th>
+                <th className="py-3.5 px-4">تاريخ آخر معاملة</th>
+                <th className="py-3.5 px-4 text-center">إجراءات الواتساب والمراسلة</th>
+                <th className="py-3.5 px-4 text-center">حالة التواصل</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {drivers.map((driver) => {
                 const cleanName = getCleanDriverName(driver.driverName);
                 const isSent = driver.status.startsWith('sent_') || driver.status === 'resolved';
-                const targetType = driver.isCritical ? 'critical' : driver.isHighDebt ? 'high_debt' : 'inactive';
+                const targetType: MessageType = driver.isCritical ? 'critical' : 
+                                                driver.walletBalance < 0 ? 'credit' : 
+                                                driver.isHighDebt ? 'high_debt' : 'inactive';
+                const isPositiveDebt = driver.walletBalance > 0;
+                const isNegativeCredit = driver.walletBalance < 0;
 
                 return (
                   <tr 
                     key={`row-${driver.id}`} 
                     className={`hover:bg-slate-50/80 transition-colors ${
-                      driver.isCritical ? 'bg-purple-50/30' : 
-                      driver.isHighDebt ? 'bg-red-50/20' : 
-                      driver.isInactive ? 'bg-amber-50/20' : ''
+                      driver.isCritical ? 'bg-purple-50/25' : 
+                      driver.isHighDebt ? 'bg-red-50/15' : 
+                      isNegativeCredit ? 'bg-emerald-50/10' :
+                      driver.isInactive ? 'bg-amber-50/15' : ''
                     }`}
                   >
                     
                     {/* 1. Driver Name & Code */}
-                    <td className="py-3 px-4">
+                    <td className="py-3.5 px-4">
                       <div className="font-bold text-slate-900 flex items-center gap-1.5">
                         <span>{cleanName}</span>
                         {driver.isCritical && (
                           <span className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                             حرج
+                          </span>
+                        )}
+                        {driver.isHighDebt && !driver.isCritical && (
+                          <span className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                            مديونية
+                          </span>
+                        )}
+                        {isNegativeCredit && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                            له مستحقات
                           </span>
                         )}
                       </div>
@@ -299,7 +361,7 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                     </td>
 
                     {/* 2. Phone Number */}
-                    <td className="py-3 px-4">
+                    <td className="py-3.5 px-4">
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono text-xs font-semibold text-slate-700" dir="ltr">
                           {driver.phone || 'بدون هاتف'}
@@ -330,7 +392,7 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                     </td>
 
                     {/* 3. Area & Zone */}
-                    <td className="py-3 px-4">
+                    <td className="py-3.5 px-4">
                       <div className="text-xs font-medium text-slate-800">
                         {driver.area || 'غير محدد'}
                       </div>
@@ -339,38 +401,72 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                       </div>
                     </td>
 
-                    {/* 4. Wallet Balance */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1.5">
-                        <span 
-                          className={`text-sm font-bold px-2 py-0.5 rounded-md inline-block ${
-                            driver.isHighDebt
-                              ? 'bg-red-100 text-red-800 border border-red-200'
-                              : Math.abs(driver.walletBalance) > 0
-                              ? 'bg-slate-100 text-slate-800'
-                              : 'bg-emerald-50 text-emerald-700'
-                          }`}
-                        >
-                          {formatCurrency(driver.walletBalance)}
-                        </span>
-                      </div>
-                      {driver.walletBalance < 0 && (
-                        <span className="text-[10px] text-red-500 block mt-0.5">
-                          (مديونية سالبة / عجز)
-                        </span>
-                      )}
-                      {driver.walletBalance > 0 && driver.isHighDebt && (
-                        <span className="text-[10px] text-amber-700 block mt-0.5">
-                          (مطلوب توريد كاش)
-                        </span>
+                    {/* 4. Wallet Balance (Distinguishing Positive Debt vs Negative Credit) */}
+                    <td className="py-3.5 px-4">
+                      {isPositiveDebt ? (
+                        /* Positive Balance: مديونية على المندوب */
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span 
+                              className={`text-sm font-black px-2.5 py-0.5 rounded-lg inline-flex items-center gap-1.5 ${
+                                driver.isHighDebt
+                                  ? 'bg-red-100 text-red-800 border border-red-300'
+                                  : 'bg-amber-50 text-amber-900 border border-amber-200'
+                              }`}
+                            >
+                              <ArrowUpRight className={`w-3.5 h-3.5 shrink-0 ${driver.isHighDebt ? 'text-red-600' : 'text-amber-600'}`} />
+                              <span dir="ltr">+{formatCurrency(driver.walletBalance)}</span>
+                            </span>
+                          </div>
+                          
+                          {/* Explanatory text badge next to / under balance */}
+                          <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                            driver.isHighDebt 
+                              ? 'bg-red-50 text-red-700 border border-red-200' 
+                              : 'bg-amber-50 text-amber-800 border border-amber-200'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${driver.isHighDebt ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                            <span>{driver.isHighDebt ? 'مديونية على المندوب (مطلوب توريدها)' : 'مديونية على المندوب'}</span>
+                          </div>
+                        </div>
+                      ) : isNegativeCredit ? (
+                        /* Negative Balance: مستحقات للمندوب (له لدى الشركة) */
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-black px-2.5 py-0.5 rounded-lg inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              <ArrowDownLeft className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                              <span dir="ltr">{formatCurrency(driver.walletBalance)}</span>
+                            </span>
+                          </div>
+
+                          {/* Explanatory text badge next to / under balance */}
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                            <span>مستحقات للمندوب (له لدى الشركة)</span>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Zero Balance: حساب خالص ومسدد */
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-lg inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200">
+                              <Check className="w-3 h-3 text-slate-500" />
+                              <span>0.00 ج.م</span>
+                            </span>
+                          </div>
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-50 text-slate-600 border border-slate-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
+                            <span>حساب خالص (لا توجد مديونية)</span>
+                          </div>
+                        </div>
                       )}
                     </td>
 
                     {/* 5. Inactive Days (بقاله قد ايه مش شغال) */}
-                    <td className="py-3 px-4">
+                    <td className="py-3.5 px-4">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 ${
+                          className={`text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 ${
                             driver.daysInactive >= 10
                               ? 'bg-red-600 text-white'
                               : driver.daysInactive >= 5
@@ -392,14 +488,14 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                     </td>
 
                     {/* 6. Last Transaction Date */}
-                    <td className="py-3 px-4">
-                      <div className="text-xs text-slate-600">
+                    <td className="py-3.5 px-4">
+                      <div className="text-xs text-slate-600 font-mono">
                         {driver.lastTransactionDate || 'غير مسجل'}
                       </div>
                     </td>
 
                     {/* 7. WhatsApp Action Buttons */}
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         {/* WhatsApp Direct Action Button */}
                         <button
@@ -409,7 +505,10 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                         >
                           <MessageSquare className="w-3.5 h-3.5" />
                           <span>
-                            {targetType === 'critical' ? 'واتساب عاجل' : targetType === 'high_debt' ? 'طلب توريد' : 'سؤال الغياب'}
+                            {targetType === 'critical' ? 'واتساب عاجل' : 
+                             targetType === 'credit' ? 'إشعار مستحقات' :
+                             targetType === 'high_debt' ? 'طلب توريد (عليه)' : 
+                             driver.isInactive ? 'سؤال الغياب' : 'واتساب المندوب'}
                           </span>
                         </button>
 
@@ -425,7 +524,7 @@ export const DriverTable: React.FC<DriverTableProps> = ({
                     </td>
 
                     {/* 8. Contact Status Toggle */}
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3.5 px-4 text-center">
                       <button
                         onClick={() => onToggleStatus(
                           driver.driverCode, 

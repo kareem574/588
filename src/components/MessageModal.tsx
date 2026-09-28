@@ -5,19 +5,22 @@ import {
   Copy, 
   Check, 
   MessageSquare, 
-  RotateCcw
+  RotateCcw,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Coins
 } from 'lucide-react';
-import { DriverRecord, MessageTemplates } from '../types';
+import { DriverRecord, MessageTemplates, MessageType } from '../types';
 import { buildMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { formatCurrency, getCleanDriverName } from '../utils/parser';
 
 interface MessageModalProps {
   driver: DriverRecord | null;
-  messageType: 'high_debt' | 'inactive' | 'critical';
+  messageType: MessageType;
   templates: MessageTemplates;
   isOpen: boolean;
   onClose: () => void;
-  onMarkSent: (driverCode: string) => void;
+  onMarkSent: (driverCode: string, type?: MessageType) => void;
 }
 
 export const MessageModal: React.FC<MessageModalProps> = ({
@@ -30,11 +33,15 @@ export const MessageModal: React.FC<MessageModalProps> = ({
 }) => {
   const [currentText, setCurrentText] = useState('');
   const [copied, setCopied] = useState(false);
-  const [selectedType, setSelectedType] = useState<'high_debt' | 'inactive' | 'critical'>(messageType);
+  const [selectedType, setSelectedType] = useState<MessageType>(messageType);
 
   useEffect(() => {
-    setSelectedType(messageType);
-  }, [messageType]);
+    if (driver && driver.walletBalance < 0 && messageType === 'high_debt') {
+      setSelectedType('credit');
+    } else {
+      setSelectedType(messageType);
+    }
+  }, [messageType, driver]);
 
   useEffect(() => {
     if (driver) {
@@ -52,7 +59,7 @@ export const MessageModal: React.FC<MessageModalProps> = ({
 
   const handleSend = () => {
     openWhatsAppChat(driver.normalizedPhone, currentText);
-    onMarkSent(driver.driverCode);
+    onMarkSent(driver.driverCode, selectedType);
     onClose();
   };
 
@@ -61,6 +68,8 @@ export const MessageModal: React.FC<MessageModalProps> = ({
   };
 
   const cleanName = getCleanDriverName(driver.driverName);
+  const isPositiveDebt = driver.walletBalance > 0;
+  const isNegativeCredit = driver.walletBalance < 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
@@ -97,10 +106,25 @@ export const MessageModal: React.FC<MessageModalProps> = ({
             <span className="text-slate-600 font-mono text-[11px]" dir="ltr">{driver.phone}</span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <span className="bg-red-50 text-red-700 px-2 py-0.5 rounded-md font-bold border border-red-200 text-[11px]">
-              {formatCurrency(driver.walletBalance)}
-            </span>
+          <div className="flex items-center gap-2">
+            {isPositiveDebt ? (
+              <span className="bg-red-50 text-red-700 px-2 py-0.5 rounded-md font-bold border border-red-200 text-[11px] flex items-center gap-1">
+                <ArrowUpRight className="w-3 h-3 text-red-600" />
+                <span dir="ltr">+{formatCurrency(driver.walletBalance)}</span>
+                <span className="text-[10px] text-red-600 font-medium">(مديونية عليه)</span>
+              </span>
+            ) : isNegativeCredit ? (
+              <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md font-bold border border-emerald-200 text-[11px] flex items-center gap-1">
+                <ArrowDownLeft className="w-3 h-3 text-emerald-600" />
+                <span dir="ltr">{formatCurrency(driver.walletBalance)}</span>
+                <span className="text-[10px] text-emerald-700 font-medium">(مستحقات له)</span>
+              </span>
+            ) : (
+              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-bold border border-slate-200 text-[11px]">
+                0.00 ج.م (خالص)
+              </span>
+            )}
+
             <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md font-bold border border-amber-200 text-[11px]">
               توقف: {driver.daysInactive} أيام
             </span>
@@ -109,35 +133,54 @@ export const MessageModal: React.FC<MessageModalProps> = ({
 
         {/* Message Type Selector */}
         <div className="px-4 sm:px-6 pt-2.5 pb-1 flex items-center gap-1.5 overflow-x-auto shrink-0 no-scrollbar">
+          {/* Debt Template Button (Positive Balance) */}
           <button
             onClick={() => setSelectedType('high_debt')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1 ${
               selectedType === 'high_debt'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-600 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            طلب توريد المحفظة
+            <ArrowUpRight className="w-3 h-3" />
+            <span>طلب توريد مديونية (عليه)</span>
           </button>
+
+          {/* Credit Template Button (Negative Balance) */}
+          <button
+            onClick={() => setSelectedType('credit')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1 ${
+              selectedType === 'credit'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+            }`}
+          >
+            <Coins className="w-3 h-3" />
+            <span>إشعار مستحقات (له)</span>
+          </button>
+
+          {/* Inactive Template Button */}
           <button
             onClick={() => setSelectedType('inactive')}
             className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
               selectedType === 'inactive'
-                ? 'bg-amber-600 text-white'
+                ? 'bg-amber-600 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            استفسار الغياب + التوريد
+            استفسار الغياب
           </button>
+
+          {/* Critical Template Button */}
           <button
             onClick={() => setSelectedType('critical')}
             className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
               selectedType === 'critical'
-                ? 'bg-purple-700 text-white'
+                ? 'bg-purple-700 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            إنذار حرج وعاجل
+            إنذار حرج
           </button>
 
           <button
@@ -152,9 +195,16 @@ export const MessageModal: React.FC<MessageModalProps> = ({
 
         {/* Message Textarea */}
         <div className="px-4 sm:px-6 py-2.5 flex-1 flex flex-col min-h-0">
-          <label className="text-[11px] sm:text-xs font-semibold text-slate-700 mb-1 block">
-            نص الرسالة المرسلة (يمكنك تعديل أي تفاصيل قبل الإرسال):
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[11px] sm:text-xs font-semibold text-slate-700 block">
+              نص الرسالة المرسلة (يمكنك تعديل أي تفاصيل قبل الإرسال):
+            </label>
+            <span className="text-[10px] text-slate-400">
+              {selectedType === 'high_debt' ? 'مديونية على المندوب (+)' :
+               selectedType === 'credit' ? 'مستحقات للمندوب (-)' :
+               selectedType === 'critical' ? 'حالة حرجة' : 'متابعة غياب'}
+            </span>
+          </div>
           <textarea
             rows={7}
             value={currentText}

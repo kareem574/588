@@ -15,7 +15,9 @@ import {
   Sliders,
   TrendingDown,
   ChevronLeft,
-  Share2
+  Share2,
+  Coins,
+  ArrowDownLeft
 } from 'lucide-react';
 import { ActiveTab, DriverRecord, FilterSettings } from '../types';
 import { formatCurrency } from '../utils/parser';
@@ -57,6 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const highDebtCount = drivers.filter(d => d.isHighDebt).length;
   const inactiveCount = drivers.filter(d => d.isInactive).length;
   const criticalCount = drivers.filter(d => d.isCritical).length;
+  const creditCount = drivers.filter(d => d.walletBalance < 0).length;
   const totalCount = drivers.length;
 
   const totalDebtSum = drivers
@@ -67,12 +70,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'high_debt' as ActiveTab,
       label: 'مديونيات مرتفعة (توريد)',
-      subtext: 'محافظ تتجاوز الحد المحدد',
+      subtext: 'محافظ تتجاوز الحد المحدد (+)',
       icon: Wallet,
       count: highDebtCount,
       color: 'text-red-600',
       badgeBg: 'bg-red-100 text-red-700',
       activeBg: 'bg-red-50 text-red-700 border-r-4 border-red-600 font-bold',
+    },
+    {
+      id: 'credit_drivers' as ActiveTab,
+      label: 'مستحقات المناديب (له)',
+      subtext: 'أرصدة سالبة دائنة للمندوب (-)',
+      icon: Coins,
+      count: creditCount,
+      color: 'text-emerald-600',
+      badgeBg: 'bg-emerald-100 text-emerald-800',
+      activeBg: 'bg-emerald-50 text-emerald-800 border-r-4 border-emerald-600 font-bold',
     },
     {
       id: 'inactive' as ActiveTab,

@@ -36,12 +36,15 @@ export interface FilterSettings {
   statusFilter: string; // حالة الإرسال
 }
 
+export type MessageType = 'high_debt' | 'credit' | 'inactive' | 'critical';
+
 export interface MessageTemplates {
   highDebtTemplate: string;
+  creditTemplate: string;
   inactiveTemplate: string;
   criticalTemplate: string;
   supervisorName: string;
   companyName: string;
 }
 
-export type ActiveTab = 'overview' | 'high_debt' | 'inactive' | 'critical' | 'all_drivers' | 'batch_queue' | 'settings';
+export type ActiveTab = 'overview' | 'high_debt' | 'inactive' | 'critical' | 'all_drivers' | 'batch_queue' | 'settings' | 'credit_drivers';

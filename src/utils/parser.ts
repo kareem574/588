@@ -17,9 +17,6 @@ export function convertArabicDigitsToEnglish(str: string): string {
 }
 
 /**
- * Clean and parse wallet balance from Arabic/English string to float
- * Handles: "3243٫38", "-60٫02", "1,250.50", "32.18", etc.
- */
 export function parseWalletBalance(rawVal: string | number | undefined | null): number {
   if (rawVal === undefined || rawVal === null) return 0;
   if (typeof rawVal === 'number') return isNaN(rawVal) ? 0 : rawVal;
@@ -27,13 +24,18 @@ export function parseWalletBalance(rawVal: string | number | undefined | null): 
   let str = String(rawVal).trim();
   str = convertArabicDigitsToEnglish(str);
   
+  // Check if negative: detects standard minus '-', unicode minus '−', dashes '–', '—', parentheses '(100)', or trailing minus '100-'
+  const isNegative = str.includes('-') || 
+                     str.includes('−') || 
+                     str.includes('–') || 
+                     str.includes('—') || 
+                     (str.startsWith('(') && str.endsWith(')'));
+  
   // Replace Arabic decimal separator (٫) with standard dot (.)
   str = str.replace(/٫/g, '.');
   
-  // Remove thousand separators if standard comma followed by 3 digits
-  // But be careful: if comma is used as decimal separator like in "3243,38"
+  // Remove thousand separators
   if (str.includes(',') && !str.includes('.')) {
-    // If there's only one comma, it might be a decimal
     const parts = str.split(',');
     if (parts.length === 2 && parts[1].length <= 2) {
       str = parts[0] + '.' + parts[1];
@@ -44,12 +46,37 @@ export function parseWalletBalance(rawVal: string | number | undefined | null): 
     str = str.replace(/,/g, '');
   }
   
-  // Remove non-numeric characters except minus sign and decimal dot
-  str = str.replace(/[^\d.-]/g, '');
+  // Remove all non-digits and non-dot
+  str = str.replace(/[^\d.]/g, '');
   
   const num = parseFloat(str);
-  return isNaN(num) ? 0 : Math.round(num * 100) / 100;
+  if (isNaN(num)) return 0;
+  
+  const finalVal = isNegative ? -Math.abs(num) : Math.abs(num);
+  return Math.round(finalVal * 100) / 100;
 }
+
+/**
+ * Determine balance type:
+ * - 'debt' (موجب +): عليه توريد كاش لصالح الشركة
+ * - 'credit' (سالب -): ليه مستحقات عند الشركة
+ * - 'zero' (صفر 0): رصيد خالص متزن
+ */
+export function getBalanceType(balance: number): 'debt' | 'credit' | 'zero' {
+  if (balance > 0.001) return 'debt';
+  if (balance < -0.001) return 'credit';
+  return 'zero';
+}
+
+/**
+ * Get clear Arabic label for the balance status
+ */
+export function getBalanceLabel(balance: number): string {
+  if (balance > 0.001) return 'عليه توريد للشركة';
+  if (balance < -0.001) return 'ليه مستحقات عند الشركة';
+  return 'رصيد خالص';
+}
+
 
 /**
  * Parse days inactive
@@ -201,17 +228,21 @@ export function parseDriversData(
     const walletBalance = parseWalletBalance(rawWallet);
     const daysInactive = parseDaysInactive(rawDays);
     const normalizedPhone = normalizePhoneNumber(phone);
+    const balanceType = getBalanceType(walletBalance);
+    const balanceLabel = getBalanceLabel(walletBalance);
 
-    // Compute high debt based on settings
+    // Compute high debt based on business rules:
+    // Positive (+): عليه توريد كاش لصالح الشركة (مديونية)
+    // Negative (-): ليه مستحقات عند الشركة (رصيد دائن للمندوب)
     let isHighDebt = false;
-    if (settings.debtCalculationMode === 'positive') {
+    if (settings.debtCalculationMode === 'positive' || !settings.debtCalculationMode) {
       isHighDebt = walletBalance >= settings.debtThreshold;
     } else if (settings.debtCalculationMode === 'negative') {
       isHighDebt = walletBalance <= -settings.debtThreshold;
     } else if (settings.debtCalculationMode === 'absolute') {
       isHighDebt = Math.abs(walletBalance) >= settings.debtThreshold;
     } else {
-      isHighDebt = Math.abs(walletBalance) >= settings.debtThreshold;
+      isHighDebt = walletBalance >= settings.debtThreshold;
     }
 
     const isInactive = daysInactive >= settings.inactiveDaysThreshold;
@@ -232,6 +263,8 @@ export function parseDriversData(
       lastTransactionDate,
       walletBalance,
       rawWalletBalance: rawWallet,
+      balanceType,
+      balanceLabel,
       daysInactive,
       rawDaysInactive: rawDays,
       isHighDebt,
@@ -247,14 +280,25 @@ export function parseDriversData(
 }
 
 /**
- * Format currency in Egyptian Pounds (EGP)
+ * Format currency in Egyptian Pounds (EGP) with clear sign (+/-) and optional status label
  */
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('ar-EG', {
+export function formatCurrency(amount: number, options?: { showSign?: boolean; withLabel?: boolean }): string {
+  const absAmount = Math.abs(amount);
+  const formattedNum = new Intl.NumberFormat('ar-EG', {
     style: 'decimal',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(amount) + ' ج.م';
+  }).format(absAmount);
+
+  if (amount > 0.001) {
+    const sign = options?.showSign ? '+ ' : '';
+    const label = options?.withLabel ? ' (عليه توريد)' : '';
+    return `${sign}${formattedNum} ج.م${label}`;
+  } else if (amount < -0.001) {
+    const label = options?.withLabel ? ' (ليه مستحقات)' : '';
+    return `- ${formattedNum} ج.م${label}`;
+  }
+  return `0 ج.م`;
 }
 
 /**

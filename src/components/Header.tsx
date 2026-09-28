@@ -126,7 +126,19 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-red-400"></span>
-            <span>مديونيات المحافظ</span>
+            <span>مديونيات المحافظ (+)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('credit_drivers')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+              activeTab === 'credit_drivers'
+                ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span>مستحقات المناديب (-)</span>
           </button>
 
           <button

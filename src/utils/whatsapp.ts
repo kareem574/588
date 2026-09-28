@@ -1,4 +1,4 @@
-import { DriverRecord, MessageTemplates } from '../types';
+import { DriverRecord, MessageTemplates, MessageType } from '../types';
 import { getCleanDriverName, formatCurrency } from './parser';
 
 export const DEFAULT_TEMPLATES: MessageTemplates = {
@@ -6,23 +6,33 @@ export const DEFAULT_TEMPLATES: MessageTemplates = {
 أهلاً بك كابتن {اسم_المندوب} (كود: {كود_المندوب})،
 معاك {المشرف} - إدارة التشغيل بشركة {الشركة}.
 
-⚠️ تنبيه هام بخصوص المحفظة:
-يوجد لديك رصيد محفظة مستحق للتوريد بقيمة: *{رصيد_المحفظة}*.
-نرجو التكرم بسرعة توريد المبلغ اليوم أو التوجه للمشرف لإنهاء التوريد لتفادي إيقاف الحساب على السيستم.
+⚠️ تنبيه بخصوص مديونية المحفظة:
+مسجل بالنظام وجود مديونية عليك مستحقة للتوريد بقيمة: *{رصيد_المحفظة}*.
+نرجو التكرم بسرعة توريد المبلغ المستحق عليك اليوم لتسوية الحساب وتفادي إيقاف الحساب على السيستم.
 
 شكراً لتعاونك ونتمنى لك دوام التوفيق.`,
+
+  creditTemplate: `السلام عليكم ورحمة الله وبركاته،
+أهلاً بك كابتن {اسم_المندوب} (كود: {كود_المندوب})،
+معاك {المشرف} - إدارة التشغيل بشركة {الشركة}.
+
+💰 إشعار بمستحقاتك المالية:
+نود إبلاغك بوجود رصيد مالي مستحق لك طرف الشركة بقيمة: *{رصيد_المحفظة}*.
+يرجى التواصل معنا أو مراجعة الإدارة لتسوية واستلام مستحقاتك في أقرب وقت.
+
+شكراً لجهودك ونتمنى لك دوام التوفيق دائماً.`,
 
   inactiveTemplate: `السلام عليكم ورحمة الله وبركاته،
 أهلاً بك كابتن {اسم_المندوب} (كود: {كود_المندوب})،
 معاك {المشرف} - إدارة التشغيل بشركة {الشركة}.
 
-🔴 استفسار وتوريد محفظة:
-لاحظنا عدم نزولك للشغل وتوقفك عن العمل منذ *{عدد_الايام} أيام* (آخر حركة مسجلة بتاريخ: {تاريخ_المعاملة}).
-رصيد محفظتك الحالي: *{رصيد_المحفظة}*.
+🔴 استفسار وتوضيح موقف:
+لاحظنا عدم نزولك للشغل وتوقفك عن العمل منذ *{عدد_الايام}* (آخر حركة مسجلة بتاريخ: {تاريخ_المعاملة}).
+رصيد محفظتك مسجل به: *{رصيد_المحفظة}*.
 
 نرجو التكرم بالرد علينا لتوضيح:
 1️⃣ ما هو سبب عدم نزولك الشغل طوال هذه الفترة؟
-2️⃣ موعد توريد رصيد المحفظة المستحق لتسوية حسابك.
+2️⃣ {مطلوب_المحفظة}.
 
 سلامتك تهمنا وبانتظار ردك وتوضيح موقفك في أقرب وقت.`,
 
@@ -31,11 +41,11 @@ export const DEFAULT_TEMPLATES: MessageTemplates = {
 معاك {المشرف} - إدارة التشغيل بشركة {الشركة}.
 
 🚨 *إشعار عاجل وهام جداً:*
-مسجل بالنظام توقفك عن العمل منذ *{عدد_الايام} أيام* مع وجود مديونية محفظة مرتفعة بقيمة: *{رصيد_المحفظة}*.
+مسجل بالنظام توقفك عن العمل منذ *{عدد_الايام}* مع وجود مديونية محفظة مستحقة عليك بقيمة: *{رصيد_المحفظة}*.
 تاريخ آخر معاملة: {تاريخ_المعاملة}.
 
 مطلوب بشكل عاجل:
-1- سرعة توريد رصيد المحفظة فوراً منعاً لإجراءات الإيقاف القانونية والمالية.
+1- سرعة توريد المديونية المستحقة عليك فوراً منعاً لإجراءات الإيقاف القانونية والمالية.
 2- إفادتنا بسبب عدم نزولك العمل خلال الفترة الماضية.
 
 يرجى التواصل الفوري مع المشرف المسؤول.`,
@@ -45,23 +55,62 @@ export const DEFAULT_TEMPLATES: MessageTemplates = {
 };
 
 /**
- * Replace template placeholders with real driver data
+ * Replace template placeholders with real driver data.
+ * Adheres strictly to the accounting rule:
+ * - Positive balance (> 0): Debt on the driver (مديونية على المندوب مطلوب توريدها)
+ * - Negative balance (< 0): Credit for the driver (فلوس ومستحقات للمندوب له طرف الشركة)
  */
 export function buildMessage(
   driver: DriverRecord,
-  templateType: 'high_debt' | 'inactive' | 'critical',
+  templateType: MessageType = 'high_debt',
   templates: MessageTemplates = DEFAULT_TEMPLATES
 ): string {
+  // If driver has negative balance and high_debt was requested, switch intelligently to creditTemplate
+  let effectiveType: MessageType = templateType;
+  if (templateType === 'high_debt' && driver.walletBalance < 0) {
+    effectiveType = 'credit';
+  }
+
   let template = templates.highDebtTemplate;
-  if (templateType === 'inactive') {
+  if (effectiveType === 'credit') {
+    template = templates.creditTemplate || DEFAULT_TEMPLATES.creditTemplate;
+  } else if (effectiveType === 'inactive') {
     template = templates.inactiveTemplate;
-  } else if (templateType === 'critical') {
+  } else if (effectiveType === 'critical') {
     template = templates.criticalTemplate;
   }
 
   const cleanName = getCleanDriverName(driver.driverName);
-  const formattedBalance = formatCurrency(Math.abs(driver.walletBalance));
-  const daysText = driver.daysInactive === 1 ? 'يوم واحد' : 
+  const absAmount = formatCurrency(Math.abs(driver.walletBalance));
+
+  // Determine explicit text labels based on positive vs negative
+  let formattedBalance = '';
+  let balanceType = '';
+  let walletStatus = '';
+  let walletAction = '';
+
+  if (driver.walletBalance > 0) {
+    // موجب: مديونية على المندوب
+    formattedBalance = `+${absAmount} (مديونية عليك)`;
+    balanceType = 'مديونية مستحقة عليك';
+    walletStatus = 'مديونية مسجلة عليك لصالح الشركة';
+    walletAction = 'موعد توريد المديونية المستحقة عليك لتسوية الحساب';
+  } else if (driver.walletBalance < 0) {
+    // سالب: فلوس للمندوب
+    formattedBalance = `-${absAmount} (مستحقات لك طرف الشركة)`;
+    balanceType = 'مستحقات مالية لك';
+    walletStatus = 'مستحقات ورصيد دائن لك طرف الشركة';
+    walletAction = 'التنسيق لاستلام وتسوية مستحقاتك المالية المسجلة لك';
+  } else {
+    // صفر: حساب مسوى
+    formattedBalance = '0.00 ج.م (حساب مسوى وخالص)';
+    balanceType = 'حساب خالص';
+    walletStatus = 'حساب مسوى ولا توجد مديونية';
+    walletAction = 'موعد عودتك للعمل واستئناف النشاط';
+  }
+
+  const daysText = driver.daysInactive === 0 ? 'اليوم' :
+                   driver.daysInactive === 1 ? 'يوم واحد' : 
                    driver.daysInactive === 2 ? 'يومين' : 
                    `${driver.daysInactive} أيام`;
 
@@ -69,6 +118,10 @@ export function buildMessage(
   message = message.replace(/\{اسم_المندوب\}/g, cleanName);
   message = message.replace(/\{كود_المندوب\}/g, driver.driverCode || 'غير محدد');
   message = message.replace(/\{رصيد_المحفظة\}/g, formattedBalance);
+  message = message.replace(/\{مبلغ_المحفظة\}/g, absAmount);
+  message = message.replace(/\{نوع_الرصيد\}/g, balanceType);
+  message = message.replace(/\{حالة_المحفظة\}/g, walletStatus);
+  message = message.replace(/\{مطلوب_المحفظة\}/g, walletAction);
   message = message.replace(/\{عدد_الايام\}/g, daysText);
   message = message.replace(/\{تاريخ_المعاملة\}/g, driver.lastTransactionDate || 'غير مسجل');
   message = message.replace(/\{المنطقة\}/g, driver.area || driver.zone || '');
