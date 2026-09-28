@@ -97,8 +97,30 @@ export default function App() {
 
   const [templates, setTemplates] = useState<MessageTemplates>(() => {
     try {
+      const CURRENT_VERSION = 'v5_debt_credit_sync';
+      const ver = localStorage.getItem('el_ezz_template_version');
       const saved = localStorage.getItem('el_ezz_message_templates');
-      return saved ? { ...DEFAULT_TEMPLATES, ...JSON.parse(saved) } : DEFAULT_TEMPLATES;
+
+      // Auto-migrate templates if version is missing or old
+      if (ver !== CURRENT_VERSION || !saved) {
+        localStorage.setItem('el_ezz_template_version', CURRENT_VERSION);
+        localStorage.setItem('el_ezz_message_templates', JSON.stringify(DEFAULT_TEMPLATES));
+        return DEFAULT_TEMPLATES;
+      }
+
+      const parsed = JSON.parse(saved);
+      if (!parsed.creditTemplate || !parsed.highDebtTemplate) {
+        localStorage.setItem('el_ezz_template_version', CURRENT_VERSION);
+        const merged = { 
+          ...DEFAULT_TEMPLATES, 
+          supervisorName: parsed.supervisorName || DEFAULT_TEMPLATES.supervisorName, 
+          companyName: parsed.companyName || DEFAULT_TEMPLATES.companyName 
+        };
+        localStorage.setItem('el_ezz_message_templates', JSON.stringify(merged));
+        return merged;
+      }
+
+      return { ...DEFAULT_TEMPLATES, ...parsed };
     } catch {
       return DEFAULT_TEMPLATES;
     }
@@ -146,9 +168,14 @@ export default function App() {
   const fetchSheetData = useCallback(async (targetSheetId = sheetId) => {
     setIsLoading(true);
     setError(null);
-
     try {
-      const res = await fetch(`/api/sheet-data?sheetId=${encodeURIComponent(targetSheetId)}`);
+      const res = await fetch(`/api/sheet-data?sheetId=${encodeURIComponent(targetSheetId)}&_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      });
       const data = await res.json();
 
       if (!res.ok || !data.success) {
