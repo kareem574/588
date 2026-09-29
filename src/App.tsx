@@ -218,15 +218,23 @@ export default function App() {
   }, [fetchSheetData]);
 
   // Keep the dashboard synchronized with the sheet automatically.
-  // Refresh every minute so new edits appear without requiring a manual reload.
+  // Poll frequently while visible and refresh immediately when the tab becomes active.
   useEffect(() => {
-    const refreshInterval = window.setInterval(() => {
+    const refresh = () => {
       if (document.visibilityState === 'visible') {
-        fetchSheetData();
+        void fetchSheetData();
       }
-    }, 60_000);
+    };
 
-    return () => window.clearInterval(refreshInterval);
+    const refreshInterval = window.setInterval(refresh, 15_000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+
+    return () => {
+      window.clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
   }, [fetchSheetData]);
 
   // Update drivers if filters/statuses change without re-fetching CSV
