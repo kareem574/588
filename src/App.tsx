@@ -80,6 +80,9 @@ export default function App() {
   const [sheetId, setSheetId] = useState<string>(() => {
     return localStorage.getItem('el_ezz_sheet_id') || DEFAULT_SHEET_ID;
   });
+  const [sheetGid, setSheetGid] = useState<string>(() => {
+    return localStorage.getItem('el_ezz_sheet_gid') || '0';
+  });
   const [rawCSV, setRawCSV] = useState<string>('');
   const [drivers, setDrivers] = useState<DriverRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -164,12 +167,16 @@ export default function App() {
     localStorage.setItem('el_ezz_sheet_id', sheetId);
   }, [sheetId]);
 
+  useEffect(() => {
+    localStorage.setItem('el_ezz_sheet_gid', sheetGid);
+  }, [sheetGid]);
+
   // Fetch Sheet Data from server proxy route
-  const fetchSheetData = useCallback(async (targetSheetId = sheetId) => {
+  const fetchSheetData = useCallback(async (targetSheetId = sheetId, targetGid = sheetGid) => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sheet-data?sheetId=${encodeURIComponent(targetSheetId)}&_t=${Date.now()}`, {
+      const res = await fetch(`/api/sheet-data?sheetId=${encodeURIComponent(targetSheetId)}&gid=${encodeURIComponent(targetGid)}&_t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -210,7 +217,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [sheetId, settings, savedStatuses]);
+  }, [sheetId, sheetGid, settings, savedStatuses]);
 
   // Initial load
   useEffect(() => {
@@ -611,12 +618,15 @@ export default function App() {
 
       <SheetConfigModal
         currentSheetId={sheetId}
+        currentGid={sheetGid}
         isOpen={isSheetConfigOpen}
         onClose={() => setIsSheetConfigOpen(false)}
-        onSaveSheetId={(newId) => {
+        onSaveSheetConfig={(newId, newGid) => {
           setSheetId(newId);
-          fetchSheetData(newId);
+          setSheetGid(newGid);
+          fetchSheetData(newId, newGid);
         }}
+        onRefreshNow={() => fetchSheetData(sheetId, sheetGid)}
       />
 
       <SettingsModal

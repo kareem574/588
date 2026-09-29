@@ -43,7 +43,32 @@ async function startServer() {
         }
       }
 
-      // 2. Fetch via CSV export URL with cache-busting timestamp
+      // 1. Try Google Sheets GViz CSV first (direct, no auth redirects)
+      const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}&_t=${Date.now()}`;
+      try {
+        const gvizRes = await fetch(gvizUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+            Accept: 'text/csv,text/plain,*/*',
+            'Cache-Control': 'no-cache',
+            Pragma: 'no-cache',
+          },
+        });
+
+        if (gvizRes.ok) {
+          const csvText = await gvizRes.text();
+          if (csvText && !csvText.includes('<!DOCTYPE html>') && csvText.trim().length > 10) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            return res.json({ success: true, source: 'csv_export', csv: csvText });
+          }
+        }
+      } catch (gvizErr) {
+        console.warn('GViz fetch failed, trying direct export:', gvizErr);
+      }
+
+      // 2. Fetch via CSV export URL with cache-busting timestamp and redirect follow
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}&_t=${Date.now()}`;
       const response = await fetch(csvUrl, {
         headers: {

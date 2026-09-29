@@ -18,7 +18,7 @@ export default async function handler(req: any, res: any) {
     const gid = (req.query?.gid as string) || '0';
 
     // 1. Fetch via Google Sheets GViz CSV or export with cache busting
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&_t=${Date.now()}`;
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}&_t=${Date.now()}`;
     const response = await fetch(gvizUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
