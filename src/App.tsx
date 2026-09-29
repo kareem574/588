@@ -222,7 +222,27 @@ export default function App() {
   // Initial load
   useEffect(() => {
     fetchSheetData();
-  }, []);
+  }, [fetchSheetData]);
+
+  // Keep the dashboard synchronized with the sheet automatically.
+  // Poll frequently while visible and refresh immediately when the tab becomes active.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchSheetData();
+      }
+    };
+
+    const refreshInterval = window.setInterval(refresh, 15_000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+
+    return () => {
+      window.clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [fetchSheetData]);
 
   // Update drivers if filters/statuses change without re-fetching CSV
   useEffect(() => {
@@ -471,7 +491,7 @@ export default function App() {
                   {activeTab === 'all_drivers' && '📋 جميع مناديب الشيت (سجل المتابعة الشامل)'}
                 </h2>
                 <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 line-clamp-1">
-                  {activeTab === 'high_debt' && 'المناديب الذين تجاوزت محفظتهم الحد المحدد (رصيد موجب = فلوس على المندوب مطلوب توريدها).'}
+                  {activeTab === 'high_debt' && 'ال��ناديب الذين تجاوزت محفظتهم الحد المحدد (رصيد موجب = فلوس على المندوب مطلوب توريدها).'}
                   {activeTab === 'credit_drivers' && 'المناديب أصحاب الأرصدة السالبة (رصيد دائن = مستحقات للمندوب لدى الشركة جاهزة للصرف).'}
                   {activeTab === 'inactive' && 'المناديب الذين لم يسجلوا حركة منذ عدة أيام - ترسل الرسالة عدد الأيام بدقة وتطلب التوريد وتوضح سبب التوقف.'}
                   {activeTab === 'critical' && 'المناديب ذوو المخاطر العالية: متوقفون عن العمل مع وجود مبالغ معلقة بالمحفظة.'}
