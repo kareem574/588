@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Header 
 } from './components/Header';
@@ -172,7 +172,11 @@ export default function App() {
   }, [sheetGid]);
 
   // Fetch Sheet Data from server proxy route
+  const activeFetchRef = useRef<AbortController | null>(null);
   const fetchSheetData = useCallback(async (targetSheetId = sheetId, targetGid = sheetGid) => {
+    activeFetchRef.current?.abort();
+    const controller = new AbortController();
+    activeFetchRef.current = controller;
     setIsLoading(true);
     setError(null);
     try {
@@ -182,6 +186,7 @@ export default function App() {
           'Cache-Control': 'no-cache',
           Pragma: 'no-cache',
         },
+        signal: controller.signal,
       });
       const data = await res.json();
 
@@ -212,10 +217,15 @@ export default function App() {
       const parsedDrivers = parseDriversData(csvText, settings, savedStatuses);
       setDrivers(parsedDrivers);
     } catch (err: any) {
-      console.error('Failed to load sheet data:', err);
-      setError(err.message || 'حدث خطأ أثناء تحميل بيانات الجدول');
+      if (err?.name !== 'AbortError') {
+        console.error('Failed to load sheet data:', err);
+        setError(err.message || 'حدث خطأ أثناء تحميل بيانات الجدول');
+      }
     } finally {
-      setIsLoading(false);
+      if (activeFetchRef.current === controller) {
+        activeFetchRef.current = null;
+        setIsLoading(false);
+      }
     }
   }, [sheetId, sheetGid, settings, savedStatuses]);
 
