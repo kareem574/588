@@ -118,7 +118,10 @@ async function startServer() {
     viteServer = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: process.env.DISABLE_HMR !== 'true',
+        // Express owns the HTTP server, but does not forward Vite's upgrade
+        // events. Disable HMR to avoid injecting a WebSocket client that can
+        // never establish a connection in this middleware setup.
+        hmr: false,
       },
       appType: 'spa',
     });
