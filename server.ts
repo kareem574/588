@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { Server } from 'http';
+import { createServer as createHttpServer, type Server } from 'http';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -118,17 +118,23 @@ async function startServer() {
     viteServer = await createViteServer({
       server: {
         middlewareMode: true,
-        // Express owns the HTTP server, but does not forward Vite's upgrade
-        // events. Disable HMR to avoid injecting a WebSocket client that can
-        // never establish a connection in this middleware setup.
-        hmr: false,
       },
       appType: 'spa',
     });
     app.use(viteServer.middlewares);
   }
 
-  const server: Server = app.listen(PORT, '0.0.0.0', () => {
+  const server: Server = createHttpServer(app);
+
+  if (viteServer) {
+    server.on('upgrade', (req, socket, head) => {
+      viteServer.ws.handleUpgrade(req, socket, head, (client: unknown) => {
+        viteServer.ws.emit('connection', client, req);
+      });
+    });
+  }
+
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on port ${PORT}`);
   });
 
